@@ -820,8 +820,8 @@ function SPSLeaveSystem() {
     const [lid, setLid] = useState(() => LS.get("worklog_savedId") || "");
     const [lpw, setLpw] = useState("");
     const [lerr, setLerr] = useState(false);
-    const [rememberId, setRememberId] = useState(() => !!LS.get("worklog_savedId"));
-    const [autoLogin, setAutoLogin] = useState(() => LS.get("worklog_auto") === "1");
+    const [rememberId, setRememberId] = useState(() => LS.get("worklog_savedId") != null ? !!LS.get("worklog_savedId") : true);
+    const [autoLogin, setAutoLogin] = useState(() => { const v = LS.get("worklog_keep"); return v == null ? true : v === "1"; });
     const [autoTried, setAutoTried] = useState(false);
     const LOGIN_DOMAIN = "sps.local"; // 아이디를 이메일로 변환할 때 쓰는 내부 도메인
     const doLogin = async () => {
@@ -849,7 +849,9 @@ function SPSLeaveSystem() {
                     const user = emp
                         ? { uid: id, name: emp.name, dept: emp.dept, rank: emp.rank, role: emp.role || "emp", eid: emp.id, _sbAuth: true }
                         : { uid: id, name: id, role: "emp", _sbAuth: true };
-                    if (rememberId || autoLogin) { LS.set("worklog_savedId", id); } else { LS.del("worklog_savedId"); }
+                    if (rememberId) { LS.set("worklog_savedId", id); } else { LS.del("worklog_savedId"); }
+                    LS.set("worklog_keep", autoLogin ? "1" : "0");
+                    if (autoLogin) { LS.set("worklog_auto", "1"); LS.set("worklog_autoPw", lpw); } else { LS.del("worklog_auto"); LS.del("worklog_autoPw"); }
                     enter(user);
                     return;
                 }
@@ -863,7 +865,8 @@ function SPSLeaveSystem() {
         }
         setLerr(false);
         const user = Object.assign(Object.assign({}, a), { uid: id });
-        if (rememberId || autoLogin) { LS.set("worklog_savedId", id); } else { LS.del("worklog_savedId"); }
+        if (rememberId) { LS.set("worklog_savedId", id); } else { LS.del("worklog_savedId"); }
+        LS.set("worklog_keep", autoLogin ? "1" : "0");
         if (autoLogin) { LS.set("worklog_auto", "1"); LS.set("worklog_autoPw", lpw); } else { LS.del("worklog_auto"); LS.del("worklog_autoPw"); }
         if (a.mc) {
             setPendingUser(user);
@@ -876,7 +879,7 @@ function SPSLeaveSystem() {
         setATab("dashboard");
     else
         setETab("home"); };
-    const doLogout = () => { LS.del("worklog_auto"); LS.del("worklog_autoPw"); setAutoLogin(false); setCu(null); setScreen("login"); setLid(LS.get("worklog_savedId") || ""); setLpw(""); };
+    const doLogout = () => { LS.del("worklog_auto"); LS.del("worklog_autoPw"); LS.del("worklog_keep"); setCu(null); setScreen("login"); setLid(LS.get("worklog_savedId") || ""); setLpw(""); };
     useEffect(() => {
         if (autoTried) return;
         setAutoTried(true);
@@ -1143,11 +1146,11 @@ function Login_({ lid, setLid, lpw, setLpw, lerr, doLogin, rememberId, setRememb
             React.createElement("input", { type: "password", value: lpw, onChange: (e) => setLpw(e.target.value), onKeyDown: (e) => e.key === "Enter" && doLogin(), placeholder: "\uBE44\uBC00\uBC88\uD638 \uC785\uB825" })),
         React.createElement("div", { className: "login-opts" },
             React.createElement("label", { className: "login-check" },
-                React.createElement("input", { type: "checkbox", checked: rememberId, onChange: (e) => { setRememberId(e.target.checked); if (!e.target.checked) setAutoLogin(false); } }),
+                React.createElement("input", { type: "checkbox", checked: rememberId, onChange: (e) => { setRememberId(e.target.checked); } }),
                 React.createElement("span", null, "\uC544\uC774\uB514 \uC800\uC7A5")),
             React.createElement("label", { className: "login-check" },
                 React.createElement("input", { type: "checkbox", checked: autoLogin, onChange: (e) => { setAutoLogin(e.target.checked); if (e.target.checked) setRememberId(true); } }),
-                React.createElement("span", null, "\uC790\uB3D9 \uB85C\uADF8\uC778"))),
+                React.createElement("span", null, "\uB85C\uADF8\uC778 \uC720\uC9C0"))),
         React.createElement("button", { className: "btn btn-primary btn-block", onClick: doLogin }, "\uB85C\uADF8\uC778"),
         lerr && React.createElement("p", { className: "err-text", style: { textAlign: "center" } }, "\uC544\uC774\uB514 \uB610\uB294 \uBE44\uBC00\uBC88\uD638\uAC00 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4."),
         React.createElement("div", { className: "sample-block" },
