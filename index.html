@@ -875,14 +875,22 @@ function SPSLeaveSystem() {
         }
         enter(user);
     };
-    const enter = (user) => { setCu(user); setScreen("main"); setNotifOpen(false); if (user.role === "admin")
+    const enter = (user) => { setCu(user); setScreen("main"); setNotifOpen(false);
+        try { if (LS.get("worklog_keep") !== "0") LS.set("worklog_session", JSON.stringify(user)); } catch (e) {}
+        if (user.role === "admin")
         setATab("dashboard");
     else
         setETab("home"); };
-    const doLogout = () => { LS.del("worklog_auto"); LS.del("worklog_autoPw"); LS.del("worklog_keep"); setCu(null); setScreen("login"); setLid(LS.get("worklog_savedId") || ""); setLpw(""); };
+    const doLogout = () => { LS.del("worklog_auto"); LS.del("worklog_autoPw"); LS.del("worklog_keep"); LS.del("worklog_session"); setCu(null); setScreen("login"); setLid(LS.get("worklog_savedId") || ""); setLpw(""); };
     useEffect(() => {
         if (autoTried) return;
         setAutoTried(true);
+        // 1) 세션 복원 (로그인 유지 - 신방식)
+        try {
+            const ss = LS.get("worklog_session");
+            if (ss) { const u = JSON.parse(ss); if (u && u.uid) { enter(u); return; } }
+        } catch (e) {}
+        // 2) 레거시 자동 로그인 (구방식 호환)
         if (LS.get("worklog_auto") !== "1") return;
         const sid = LS.get("worklog_savedId");
         const spw = LS.get("worklog_autoPw");
@@ -1137,7 +1145,8 @@ function Login_({ lid, setLid, lpw, setLpw, lerr, doLogin, rememberId, setRememb
     return (React.createElement("div", { className: "auth-card" },
         React.createElement("div", { className: "auth-brand" },
             React.createElement("img", { src: LOGO_SRC, alt: "Site Planning Seoul", style: { width: 96, height: "auto", margin: "0 auto 4px", display: "block", borderRadius: 16 } }),
-            React.createElement("h1", { className: "auth-title" }, "Worklog")),
+            React.createElement("h1", { className: "auth-title" }, "Worklog"),
+            React.createElement("p", { style: { fontSize: 11, color: "var(--muted)", margin: "2px 0 0", textAlign: "center" } }, "v2.1")),
         React.createElement("div", { className: "field" },
             React.createElement("label", { className: "flabel" }, "\uC544\uC774\uB514"),
             React.createElement("input", { value: lid, onChange: (e) => setLid(e.target.value), placeholder: "\uC544\uC774\uB514 \uC785\uB825" })),
