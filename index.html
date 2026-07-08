@@ -1195,7 +1195,7 @@ function Login_({ lid, setLid, lpw, setLpw, lerr, doLogin, rememberId, setRememb
         React.createElement("div", { className: "auth-brand" },
             React.createElement("img", { src: LOGO_SRC, alt: "Site Planning Seoul", style: { width: 96, height: "auto", margin: "0 auto 4px", display: "block", borderRadius: 16 } }),
             React.createElement("h1", { className: "auth-title" }, "Worklog"),
-            React.createElement("p", { style: { fontSize: 11, color: "var(--muted)", margin: "2px 0 0", textAlign: "center" } }, "v2.8")),
+            React.createElement("p", { style: { fontSize: 11, color: "var(--muted)", margin: "2px 0 0", textAlign: "center" } }, "v2.9")),
         React.createElement("div", { className: "field" },
             React.createElement("label", { className: "flabel" }, "\uC544\uC774\uB514"),
             React.createElement("input", { value: lid, onChange: (e) => setLid(e.target.value), placeholder: "\uC544\uC774\uB514 \uC785\uB825" })),
@@ -5493,7 +5493,7 @@ function EmpMyInfo({ cu, gE, setEmps, accounts, setAccounts }) {
                     React.createElement("span", null, e.note))))));
 }
 /* 문서 PDF 출력 (브라우저 인쇄 → PDF 저장, 한글 완벽 지원) */
-function printDoc(doc, tpl, emp){
+function printDoc(doc, tpl, emp, gE){
   const esc = (s)=> String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
   const won = (v)=> (v==null||v==="")?"":Number(v).toLocaleString();
   const d = doc.data || {};
@@ -5505,6 +5505,8 @@ function printDoc(doc, tpl, emp){
   if (tpl && tpl.layout === "expense"){
     const items = (d.items && d.items.length) ? d.items : [{ date:d.spendDate, project:d.project, vendor:d.vendor, amount:d.amount, content:d.content }];
     const ap = d.approvers || {};
+    const apprList = ((tpl && tpl.approvers) || [{key:"ceo", label:"대표이사"}])
+      .filter(function(a){ return (a.role||"review")!=="cc"; });
     const sum = items.reduce(function(s,it){ return s + (it.amount===""||it.amount==null?0:(Number(it.amount)||0)); }, 0);
     let rowsHtml = "";
     items.forEach(function(it){
@@ -5749,7 +5751,7 @@ function DocDetailModal({ doc, tpl, gE, onClose }){
       React.createElement("div", { className:"modal-head" },
         React.createElement("div", { className:"modal-title" }, tpl.name),
         React.createElement("div", { style:{ display:"flex", gap:8 } },
-          React.createElement("button", { className:"btn btn-line btn-xs", onClick:()=>printDoc(doc, tpl, gE(doc.eid)) }, React.createElement(Download, { size:13 }), "PDF"),
+          React.createElement("button", { className:"btn btn-line btn-xs", onClick:()=>printDoc(doc, tpl, gE(doc.eid), gE) }, React.createElement(Download, { size:13 }), "PDF"),
           React.createElement("button", { className:"icon-x", onClick:onClose }, React.createElement(X, { size:18 })))),
       React.createElement("div", { style:{ display:"flex", alignItems:"center", gap:8, marginBottom:14 } },
         React.createElement(Pill, { a: stMap[doc.st][0] }, stMap[doc.st][1]),
@@ -5884,7 +5886,7 @@ function AdminDocs({ cu, emps, gE, docTemplates, setDocTemplates, docs, setDocs,
             React.createElement("td", null, React.createElement(Pill, { a: stMap[d.st][0] }, stMap[d.st][1])),
             React.createElement("td", null, React.createElement("div", { className:"row-actions" },
               React.createElement("button", { className:"btn btn-line btn-xs", onClick:()=>setDetail(d) }, "\uBCF4\uAE30"),
-              React.createElement("button", { className:"btn btn-line btn-xs", onClick:()=>printDoc(d, tplOf(d.tid), gE(d.eid)) }, React.createElement(Download, { size:12 }), "PDF"),
+              React.createElement("button", { className:"btn btn-line btn-xs", onClick:()=>printDoc(d, tplOf(d.tid), gE(d.eid), gE) }, React.createElement(Download, { size:12 }), "PDF"),
               d.st==="pending" && React.createElement("button", { className:"btn btn-approve btn-xs", onClick:()=>decide(d,"approved") }, "\uC2B9\uC778"),
               d.st==="pending" && React.createElement("button", { className:"btn btn-reject btn-xs", onClick:()=>decide(d,"rejected") }, "\uBC18\uB824"),
               React.createElement("button", { className:"btn btn-ghost btn-xs", onClick:()=>{ if(!confirm("\uC774 \uBB38\uC11C\uB97C \uC0AD\uC81C\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C?")) return; if(window.__sb && d._sb) sbDeleteDoc(d.id); setDocs(p=>p.filter(x=>x.id!==d.id)); } }, "\uC0AD\uC81C")))); })))) ),
