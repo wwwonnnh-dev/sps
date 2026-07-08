@@ -311,7 +311,9 @@ const Zap = _mkLine(["M13 2L3 14h7l-1 8 10-12h-7l1-8z"]);
 const Receipt = _mkLine(["M6 2h12a1 1 0 0 1 1 1v18l-2.5-1.5L14 21l-2-1.5L10 21l-1.5-1.5L6 21l-1-1V3a1 1 0 0 1 1-1z", "M9 7h6", "M8.5 11l1.2 4 2.3-4 2.3 4 1.2-4", "M8 13.5h8"]);
 const Palmtree = _mkLine(["M17.8 19.2L16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"]);
 /* ─────────────────────────  CONSTANTS  ───────────────────────── */
-const CY = 2026, TODAY = "2026-06-16", WD = 8, BDH = 2;
+const _nowD = new Date();
+const _p2 = (n) => String(n).padStart(2, "0");
+const CY = _nowD.getFullYear(), TODAY = _nowD.getFullYear() + "-" + _p2(_nowD.getMonth() + 1) + "-" + _p2(_nowD.getDate()), WD = 8, BDH = 2;
 // 휴일근로 대체휴무 환산: 8시간(점심 휴게 포함, 실근로 7h) 이상 근로 시 1일(WD시간) 적립
 const HOL_FULL_DAY_MIN = 8; // 휴일근로 8시간(점심 휴게 1시간 포함, 실근로 7h) = 대체휴무 1일
 const compFromHoliday = (h) => (h >= HOL_FULL_DAY_MIN ? WD : h); // 8시간 이상이면 1일, 미만이면 일한 시간만큼
@@ -1193,7 +1195,7 @@ function Login_({ lid, setLid, lpw, setLpw, lerr, doLogin, rememberId, setRememb
         React.createElement("div", { className: "auth-brand" },
             React.createElement("img", { src: LOGO_SRC, alt: "Site Planning Seoul", style: { width: 96, height: "auto", margin: "0 auto 4px", display: "block", borderRadius: 16 } }),
             React.createElement("h1", { className: "auth-title" }, "Worklog"),
-            React.createElement("p", { style: { fontSize: 11, color: "var(--muted)", margin: "2px 0 0", textAlign: "center" } }, "v2.4")),
+            React.createElement("p", { style: { fontSize: 11, color: "var(--muted)", margin: "2px 0 0", textAlign: "center" } }, "v2.8")),
         React.createElement("div", { className: "field" },
             React.createElement("label", { className: "flabel" }, "\uC544\uC774\uB514"),
             React.createElement("input", { value: lid, onChange: (e) => setLid(e.target.value), placeholder: "\uC544\uC774\uB514 \uC785\uB825" })),
@@ -5791,9 +5793,9 @@ function DocDetailModal({ doc, tpl, gE, onClose }){
                 React.createElement("div", { className:"docview-appr-row" },
                   tpl.approvers.filter(a=>(a.role||"review")!=="cc").map((a,i)=>{ const ae=gE(a.eid); const signed=doc.data.signs&&doc.data.signs[a.key]; const rl=a.role==="approval"?"\uC2B9\uC778":"\uACB0\uC7AC"; return React.createElement("div", { key:i, className:"docview-appr-cell"+(signed?" signed":"") },
                     React.createElement("span", { className:"docview-appr-role" }, rl),
-                    React.createElement("span", { className:"docview-appr-rank" }, ae?(ae.rank||ae.name):(a.label||"")),
-                    React.createElement("span", { className:"docview-appr-sign" }, signed?signed:React.createElement("span", { className:"docview-appr-wait" }, "\uB300\uAE30")),
-                    React.createElement("span", { className:"docview-appr-name" }, ae?ae.name:"")); })),
+                    React.createElement("span", { className:"docview-appr-name2" }, ae?ae.name:(a.label||"")),
+                    (ae&&ae.rank) ? React.createElement("span", { className:"docview-appr-rankS" }, ae.rank) : null,
+                    signed ? React.createElement("span", { className:"docview-appr-done" }, "\uC644\uB8CC") : React.createElement("span", { className:"docview-appr-wait2" }, "\uB300\uAE30")); })),
                 (tpl.approvers.filter(a=>a.role==="cc").length) ? React.createElement("div", { className:"docview-cc" },
                   React.createElement("span", { className:"docview-cc-label" }, "\uCC38\uC870"),
                   React.createElement("span", null, tpl.approvers.filter(a=>a.role==="cc").map(a=>{ const ae=gE(a.eid); return ae?ae.name:(a.label||""); }).filter(Boolean).join(", "))) : null) : null);
@@ -5836,7 +5838,18 @@ function AdminDocs({ cu, emps, gE, docTemplates, setDocTemplates, docs, setDocs,
     const e=gE(d.eid);
     addNotif("emp:"+d.eid, (tplOf(d.tid)||{}).name+" \uBB38\uC11C\uAC00 "+(st==="approved"?"\uC2B9\uC778":"\uBC18\uB824")+"\uB418\uC5C8\uC2B5\uB2C8\uB2E4.", "leave");
   };
-  const pending = docs.filter(d=>d.st==="pending");
+  const dedupeDocs = (list)=>{
+    const seen = {}; const out = [];
+    list.forEach(d=>{
+      const dd = d.data||{};
+      const amt = dd.items ? dd.items.reduce((s,it)=>s+(Number(it.amount)||0),0) : (dd.estCost||"");
+      const key = [d.eid, d.tid, d.app, amt, dd.remark||dd.purpose||""].join("|");
+      if(seen[key]) return; seen[key] = true; out.push(d);
+    });
+    return out;
+  };
+  const allDocs = dedupeDocs(docs);
+  const pending = allDocs.filter(d=>d.st==="pending");
   const stMap = { pending:["amber","\uB300\uAE30"], approved:["mint","\uC2B9\uC778"], rejected:["rose","\uBC18\uB824"] };
 
   // 서식 편집기 저장
@@ -5863,8 +5876,8 @@ function AdminDocs({ cu, emps, gE, docTemplates, setDocTemplates, docs, setDocs,
       React.createElement("div", { className:"dt-wrap" }, React.createElement("table", { className:"dt" },
         React.createElement("thead", null, React.createElement("tr", null,
           ["\uBB38\uC11C","\uC2E0\uCCAD\uC790","\uC81C\uCD9C\uC77C","\uC0C1\uD0DC",""].map((h,i)=>React.createElement("th", { key:i }, h)))),
-        React.createElement("tbody", null, docs.length===0 ? React.createElement("tr", null, React.createElement("td", { className:"empty-cell", colSpan:5 }, "\uC81C\uCD9C\uB41C \uBB38\uC11C\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4"))
-          : docs.slice().sort((a,b)=>(b.app||"").localeCompare(a.app||"")).map((d)=>{ const t=tplOf(d.tid); const e=gE(d.eid); const Ic=docIcon(t&&t.icon); return React.createElement("tr", { key:d.id },
+        React.createElement("tbody", null, allDocs.length===0 ? React.createElement("tr", null, React.createElement("td", { className:"empty-cell", colSpan:5 }, "\uC81C\uCD9C\uB41C \uBB38\uC11C\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4"))
+          : allDocs.slice().sort((a,b)=>(b.app||"").localeCompare(a.app||"")).map((d)=>{ const t=tplOf(d.tid); const e=gE(d.eid); const Ic=docIcon(t&&t.icon); return React.createElement("tr", { key:d.id },
             React.createElement("td", null, React.createElement("span", { className:"cell-user" }, React.createElement("span", { className:"search-item-ic" }, React.createElement(Ic, { size:15 })), React.createElement("span", { className:"cu-name" }, (t&&t.name)||"\uBB38\uC11C"))),
             React.createElement("td", null, (e&&e.name)||"-"),
             React.createElement("td", { className:"muted" }, d.app),
@@ -5873,7 +5886,8 @@ function AdminDocs({ cu, emps, gE, docTemplates, setDocTemplates, docs, setDocs,
               React.createElement("button", { className:"btn btn-line btn-xs", onClick:()=>setDetail(d) }, "\uBCF4\uAE30"),
               React.createElement("button", { className:"btn btn-line btn-xs", onClick:()=>printDoc(d, tplOf(d.tid), gE(d.eid)) }, React.createElement(Download, { size:12 }), "PDF"),
               d.st==="pending" && React.createElement("button", { className:"btn btn-approve btn-xs", onClick:()=>decide(d,"approved") }, "\uC2B9\uC778"),
-              d.st==="pending" && React.createElement("button", { className:"btn btn-reject btn-xs", onClick:()=>decide(d,"rejected") }, "\uBC18\uB824")))); })))) ),
+              d.st==="pending" && React.createElement("button", { className:"btn btn-reject btn-xs", onClick:()=>decide(d,"rejected") }, "\uBC18\uB824"),
+              React.createElement("button", { className:"btn btn-ghost btn-xs", onClick:()=>{ if(!confirm("\uC774 \uBB38\uC11C\uB97C \uC0AD\uC81C\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C?")) return; if(window.__sb && d._sb) sbDeleteDoc(d.id); setDocs(p=>p.filter(x=>x.id!==d.id)); } }, "\uC0AD\uC81C")))); })))) ),
 
     sub==="templates" && React.createElement(React.Fragment, null,
       React.createElement("div", { className:"card", style:{ marginBottom:16 } },
@@ -5948,17 +5962,28 @@ function EmpDocs({ cu, gE, emps, docTemplates, docs, setDocs, apprLines, ids, ad
   const [picked, setPicked] = useState(null); // 작성 중 template
   const [form, setForm] = useState({});
   const [detail, setDetail] = useState(null);
-  const mine = docs.filter(d=>d.eid===cu.eid).sort((a,b)=>(b.app||"").localeCompare(a.app||""));
+  // 같은 내용 문서 중복 제거 (작성자+서식+제출일+금액+비고 기준)
+  const dedupeDocs = (list)=>{
+    const seen = {}; const out = [];
+    list.forEach(d=>{
+      const dd = d.data||{};
+      const amt = dd.items ? dd.items.reduce((s,it)=>s+(Number(it.amount)||0),0) : (dd.estCost||"");
+      const key = [d.eid, d.tid, d.app, amt, dd.remark||dd.purpose||""].join("|");
+      if(seen[key]) return; seen[key] = true; out.push(d);
+    });
+    return out;
+  };
+  const mine = dedupeDocs(docs.filter(d=>d.eid===cu.eid)).sort((a,b)=>(b.app||"").localeCompare(a.app||""));
   const tplOf = (tid)=>docTemplates.find(t=>t.id===tid);
   const line = apprLines.doc || { ap:[], cc:[] };
   const stMap = { pending:["amber","\uB300\uAE30"], approved:["mint","\uC2B9\uC778"], rejected:["rose","\uBC18\uB824"] };
   const start = (t)=>{ setPicked(t); setForm({}); };
   // 받은 결재: 내가 결재자로 지정된 대기 문서
-  const inbox = docs.filter(d=>{
+  const inbox = dedupeDocs(docs.filter(d=>{
     if(d.st!=="pending") return false;
     const tpl=tplOf(d.tid); const apprs=(tpl&&tpl.approvers)||[];
     return apprs.some(a=>a.eid===cu.eid && (a.role||"review")!=="cc");
-  }).sort((a,b)=>(b.app||"").localeCompare(a.app||""));
+  })).sort((a,b)=>(b.app||"").localeCompare(a.app||""));
   const mySigned = (d)=>{ const tpl=tplOf(d.tid); const apprs=(tpl&&tpl.approvers)||[]; const mine=apprs.filter(a=>a.eid===cu.eid&&(a.role||"review")!=="cc"); return mine.length>0 && mine.every(a=>d.data&&d.data.signs&&d.data.signs[a.key]); };
   const signDoc = (d)=>{
     const tpl=tplOf(d.tid); const apprs=(tpl&&tpl.approvers)||[];
@@ -5981,6 +6006,11 @@ function EmpDocs({ cu, gE, emps, docTemplates, docs, setDocs, apprLines, ids, ad
     const tpl=tplOf(d.tid);
     addNotif("emp:"+d.eid, ((tpl||{}).name||"\uBB38\uC11C")+" \uBB38\uC11C\uAC00 \uBC18\uB824\uB418\uC5C8\uC2B5\uB2C8\uB2E4.", "leave");
   };
+  const withdrawDoc = (d)=>{
+    if(!confirm("\uC774 \uBB38\uC11C\uB97C \uCCA0\uD68C(\uC0AD\uC81C)\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C?")) return;
+    if(window.__sb && d._sb) sbDeleteDoc(d.id);
+    setDocs(p=>p.filter(x=>x.id!==d.id));
+  };
   const submit = ()=>{
     if(picked.layout==="expense"){
       if(!form.payMethod || !String(form.payMethod).trim()) return alert("\uACB0\uC81C\uBC29\uC2DD\uC744 \uC785\uB825\uD558\uC138\uC694");
@@ -5990,6 +6020,7 @@ function EmpDocs({ cu, gE, emps, docTemplates, docs, setDocs, apprLines, ids, ad
     } else {
       for(const f of picked.fields){ if(f.required && (form[f.key]===undefined || String(form[f.key]).trim()==="")) return alert(f.label+" \uD56D\uBAA9\uC744 \uC785\uB825\uD558\uC138\uC694"); }
     }
+    if (submit._busy) return; submit._busy = true; setTimeout(()=>{ submit._busy = false; }, 1500);
     const doc = { id: ids.current.dc++, tid: picked.id, eid: cu.eid, app: TODAY, st:"pending", data: Object.assign({}, form) };
     setDocs(p=>[...p, doc]);
     if (window.__sb) {
@@ -6004,21 +6035,19 @@ function EmpDocs({ cu, gE, emps, docTemplates, docs, setDocs, apprLines, ids, ad
       inbox.length>0 && React.createElement("div", { className:"card", style:{ marginBottom:16 } },
         React.createElement("div", { className:"card-head" },
           React.createElement("h3", null, "\uBC1B\uC740 \uACB0\uC7AC"),
-          React.createElement("span", { className:"subtab-badge" }, inbox.length)),
-        React.createElement("div", { className:"table-wrap" }, React.createElement("table", { className:"tbl" },
-          React.createElement("thead", null, React.createElement("tr", null,
-            ["\uBB38\uC11C","\uC2E0\uCCAD\uC790","\uC81C\uCD9C\uC77C",""].map((h,i)=>React.createElement("th", { key:i }, h)))),
-          React.createElement("tbody", null, inbox.map(d=>{ const e=gE(d.eid); const done=mySigned(d); return React.createElement("tr", { key:d.id },
-            React.createElement("td", null, (tplOf(d.tid)||{}).name||"-"),
-            React.createElement("td", null, e?e.name:"-"),
-            React.createElement("td", null, d.app||"-"),
-            React.createElement("td", { className:"td-actions" },
-              React.createElement("button", { className:"btn btn-line btn-xs", onClick:()=>setDetail(d) }, "\uBCF4\uAE30"),
-              done
-                ? React.createElement("span", { className:"chip chip-mint", style:{ fontSize:11 } }, "\uACB0\uC7AC\uC644\uB8CC")
-                : React.createElement(React.Fragment, null,
-                    React.createElement("button", { className:"btn btn-primary btn-xs", onClick:()=>signDoc(d) }, "\uC2B9\uC778"),
-                    React.createElement("button", { className:"btn btn-line btn-xs", onClick:()=>rejectDoc(d) }, "\uBC18\uB824")))); })))) ),
+          React.createElement("span", { className:"inbox-cnt" }, inbox.length)),
+        React.createElement("div", { className:"inbox-list" }, inbox.map(d=>{ const e=gE(d.eid); const done=mySigned(d); const tpl=tplOf(d.tid); return React.createElement("div", { key:d.id, className:"inbox-item" },
+          React.createElement("span", { className:"inbox-ic" }, React.createElement(FileText, { size:18 })),
+          React.createElement("div", { className:"inbox-info" },
+            React.createElement("span", { className:"inbox-title" }, (tpl||{}).name||"-"),
+            React.createElement("span", { className:"inbox-sub" }, (e?e.name:"-")+" \u00B7 "+(d.app||"-")+" \uC81C\uCD9C")),
+          React.createElement("div", { className:"inbox-actions" },
+            React.createElement("button", { className:"btn btn-ghost btn-xs", onClick:()=>setDetail(d) }, "\uBCF4\uAE30"),
+            done
+              ? React.createElement("span", { className:"chip chip-mint", style:{ fontSize:11 } }, "\uACB0\uC7AC\uC644\uB8CC")
+              : React.createElement(React.Fragment, null,
+                  React.createElement("button", { className:"btn btn-line btn-xs", onClick:()=>rejectDoc(d) }, "\uBC18\uB824"),
+                  React.createElement("button", { className:"btn btn-primary btn-xs", onClick:()=>signDoc(d) }, "\uC2B9\uC778")))); }))),
       React.createElement("div", { className:"card", style:{ marginBottom:16 } },
         React.createElement("div", { className:"card-head" }, React.createElement("h3", null, "\uC0C8 \uBB38\uC11C \uC791\uC131")),
         React.createElement("p", { className:"lead" }, "\uC11C\uC2DD\uC744 \uC120\uD0DD\uD574 \uBB38\uC11C\uB97C \uC791\uC131\uD558\uACE0 \uACB0\uC7AC\uB97C \uC0C1\uC2E0\uD558\uC138\uC694."),
@@ -6038,7 +6067,7 @@ function EmpDocs({ cu, gE, emps, docTemplates, docs, setDocs, apprLines, ids, ad
               React.createElement("td", null, React.createElement("span", { className:"cell-user" }, React.createElement("span", { className:"search-item-ic" }, React.createElement(Ic, { size:15 })), React.createElement("span", { className:"cu-name" }, (t&&t.name)||"\uBB38\uC11C"))),
               React.createElement("td", { className:"muted" }, d.app),
               React.createElement("td", null, React.createElement(Pill, { a: stMap[d.st][0] }, stMap[d.st][1])),
-              React.createElement("td", null, React.createElement("div", { className:"row-actions" }, React.createElement("button", { className:"btn btn-line btn-xs", onClick:()=>setDetail(d) }, "\uBCF4\uAE30"), React.createElement("button", { className:"btn btn-line btn-xs", onClick:()=>printDoc(d, tplOf(d.tid), gE(d.eid)) }, React.createElement(Download, { size:12 }), "PDF")))); })))))),
+              React.createElement("td", null, React.createElement("div", { className:"row-actions" }, React.createElement("button", { className:"btn btn-line btn-xs", onClick:()=>setDetail(d) }, "\uBCF4\uAE30"), React.createElement("button", { className:"btn btn-line btn-xs", onClick:()=>printDoc(d, tplOf(d.tid), gE(d.eid)) }, React.createElement(Download, { size:12 }), "PDF"), d.st==="pending" ? React.createElement("button", { className:"btn btn-ghost btn-xs", onClick:()=>withdrawDoc(d) }, "\uCCA0\uD68C") : null))); })))))),
 
     picked && React.createElement("div", { className:"card", style:{ maxWidth: picked.layout==="expense"?980:680 } },
       React.createElement("div", { className:"card-head" },
@@ -6378,6 +6407,15 @@ table.dt{width:100%;border-collapse:collapse;}
 .notice-slim{margin-bottom:12px;}
 .notice-slim-inner{display:flex;align-items:center;gap:13px;padding:14px 16px;background:#fff;border:1px solid var(--line);border-radius:14px;}
 .notice-ic-chip{flex-shrink:0;width:38px;height:38px;border-radius:11px;background:#eaf2fe;color:var(--accent);display:inline-flex;align-items:center;justify-content:center;}
+.inbox-cnt{font-size:11px;font-weight:700;color:#fff;background:var(--accent);min-width:20px;height:20px;padding:0 6px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center;}
+.inbox-list{display:flex;flex-direction:column;gap:8px;}
+.inbox-item{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:#fff;}
+.inbox-ic{flex-shrink:0;width:38px;height:38px;border-radius:11px;background:#eaf2fe;color:var(--accent);display:inline-flex;align-items:center;justify-content:center;}
+.inbox-info{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;}
+.inbox-title{font-size:14px;font-weight:700;}
+.inbox-sub{font-size:12px;color:var(--muted);}
+.inbox-actions{display:flex;align-items:center;gap:6px;flex-shrink:0;}
+@media (max-width:560px){ .inbox-item{flex-wrap:wrap;} .inbox-actions{width:100%;justify-content:flex-end;margin-top:4px;} }
 .notice-slim-left{display:flex;align-items:center;gap:10px;flex:1;min-width:0;}
 .notice-slim-empty{font-size:13px;color:var(--muted);}
 .notice-slim-list{display:flex;flex-direction:column;gap:6px;flex:1;min-width:0;}
@@ -6802,10 +6840,14 @@ textarea:focus{outline:none;border-color:var(--lilac);box-shadow:0 0 0 4px rgba(
 .docview-appr-cell{flex:0 0 auto;min-width:74px;border:1px solid var(--line);border-radius:10px;padding:8px 10px;display:flex;flex-direction:column;align-items:center;gap:3px;background:#fff;}
 .docview-appr-cell.signed{background:#f2f7ff;border-color:#c7dbff;}
 .docview-appr-rank{font-size:11px;color:var(--muted);font-weight:600;}
+.docview-appr-name2{font-size:13.5px;font-weight:700;}
+.docview-appr-rankS{font-size:10.5px;color:var(--muted);}
+.docview-appr-done{font-size:10.5px;font-weight:700;color:#0f8a52;background:#e6f7ee;padding:2px 8px;border-radius:6px;margin-top:2px;}
+.docview-appr-wait2{font-size:10.5px;font-weight:600;color:#8a929e;background:#f0f2f6;padding:2px 8px;border-radius:6px;margin-top:2px;}
 .docview-appr-sign{font-size:14px;font-weight:800;color:#1d4ed8;min-height:20px;display:flex;align-items:center;}
 .docview-appr-wait{font-size:11px;color:#b0b6c0;font-weight:500;}
 .docview-appr-name{font-size:10.5px;color:var(--muted);}
-.docview-appr-role{font-size:9.5px;font-weight:700;color:var(--accent);background:#eaf2fe;padding:1px 6px;border-radius:4px;margin-bottom:2px;}
+.docview-appr-role{font-size:9px;font-weight:700;color:#8a929e;background:transparent;padding:0;border-radius:0;margin-bottom:3px;letter-spacing:.02em;}
 .docview-cc{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:12px;color:#3a4050;}
 .docview-cc-label{font-size:10.5px;font-weight:700;color:#5a6473;background:#eceef2;padding:2px 7px;border-radius:5px;}
 .docview-appr{margin-top:14px;}
