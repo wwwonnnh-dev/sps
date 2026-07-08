@@ -5520,14 +5520,21 @@ function printDoc(doc, tpl, emp, gE){
       +     '<img src="'+DOCF_LOGO+'" class="logo"/>'
       +     '<div class="title">'+esc((tpl?tpl.name:"\uC9C0\uCD9C\uACB0\uC758\uC11C").split("").join(" "))+'</div>'
       +   '</td>'
-      +   '<td class="sign-cell">'
-      +     '<table class="sign">'
-      +       '<colgroup><col class="csv"/><col class="cnm"/></colgroup>'
-      +       '<tr>'
-      +       '<td class="sv" rowspan="2">\uACB0<br/>\uC7AC</td>'
-      +       '<th>'+esc((d.apprLabels&&d.apprLabels.ceo)||'\uB300\uD45C\uC774\uC0AC')+'</th>'
-      +     '</tr><tr><td class="sbx">'+esc(ap.ceo)+'</td></tr></table>'
-      +   '</td>'
+      +   '<td class="sign-cell">'+
+      '<table class="sign">'+
+        '<colgroup>'+apprList.map(function(){return '<col class="csv"/><col class="cnm"/>';}).join('')+'</colgroup>'+
+        '<tr>'+apprList.map(function(a){
+          var e=(a.eid&&typeof gE==="function")?gE(a.eid):null;
+          var lbl=e?(e.rank||e.name):(a.label||(d.apprLabels&&d.apprLabels[a.key])||'');
+          var roleTxt=(a.role==="approval")?"승인":"결재";
+          return '<td class="sv" rowspan="2">'+roleTxt.split("").join("<br/>")+'</td><th>'+esc(lbl)+'</th>';
+        }).join('')+'</tr>'+
+        '<tr>'+apprList.map(function(a){
+          var sv=(ap[a.key]!=null?ap[a.key]:(d.signs&&d.signs[a.key]))||'';
+          return '<td class="sbx">'+esc(sv)+'</td>';
+        }).join('')+'</tr>'+
+      '</table>'+
+    '</td>'
       + '</tr></table>'
       + '<table class="meta"><tr>'
       +   '<th class="mk">\uC791\uC131\uC790</th><td class="mv">'+esc(writerName)+'</td>'
@@ -6069,7 +6076,7 @@ function EmpDocs({ cu, gE, emps, docTemplates, docs, setDocs, apprLines, ids, ad
               React.createElement("td", null, React.createElement("span", { className:"cell-user" }, React.createElement("span", { className:"search-item-ic" }, React.createElement(Ic, { size:15 })), React.createElement("span", { className:"cu-name" }, (t&&t.name)||"\uBB38\uC11C"))),
               React.createElement("td", { className:"muted" }, d.app),
               React.createElement("td", null, React.createElement(Pill, { a: stMap[d.st][0] }, stMap[d.st][1])),
-              React.createElement("td", null, React.createElement("div", { className:"row-actions" }, React.createElement("button", { className:"btn btn-line btn-xs", onClick:()=>setDetail(d) }, "\uBCF4\uAE30"), React.createElement("button", { className:"btn btn-line btn-xs", onClick:()=>printDoc(d, tplOf(d.tid), gE(d.eid)) }, React.createElement(Download, { size:12 }), "PDF"), d.st==="pending" ? React.createElement("button", { className:"btn btn-ghost btn-xs", onClick:()=>withdrawDoc(d) }, "\uCCA0\uD68C") : null))); })))))),
+              React.createElement("td", null, React.createElement("div", { className:"row-actions" }, React.createElement("button", { className:"btn btn-line btn-xs", onClick:()=>setDetail(d) }, "\uBCF4\uAE30"), React.createElement("button", { className:"btn btn-line btn-xs", onClick:()=>printDoc(d, tplOf(d.tid), gE(d.eid), gE) }, React.createElement(Download, { size:12 }), "PDF"), d.st==="pending" ? React.createElement("button", { className:"btn btn-ghost btn-xs", onClick:()=>withdrawDoc(d) }, "\uCCA0\uD68C") : null))); })))))),
 
     picked && React.createElement("div", { className:"card", style:{ maxWidth: picked.layout==="expense"?980:680 } },
       React.createElement("div", { className:"card-head" },
