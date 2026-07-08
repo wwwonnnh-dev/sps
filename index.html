@@ -219,6 +219,25 @@ async function sbDeleteNotice(id){
   if(!sb) return false;
   try { var res = await sb.from("notices").delete().eq("id", id); return !res.error; } catch(e){ return false; }
 }
+/* ===== 서식(doc_templates) <-> Supabase ===== */
+async function sbLoadTpls(){
+  if(!sb) return null;
+  try { var res = await sb.from("doc_templates").select("*").order("id",{ascending:true});
+    if(res.error){ console.warn("tpl load error", res.error); return null; }
+    return res.data.map(function(r){ return r.data; }).filter(Boolean); } catch(e){ console.warn(e); return null; }
+}
+async function sbUpsertTpl(t){
+  if(!sb) return false;
+  try {
+    var found = await sb.from("doc_templates").select("id").eq("id", t.id).limit(1);
+    if(found.data && found.data.length){ var up = await sb.from("doc_templates").update({ data:t }).eq("id", t.id); return !up.error; }
+    var ins = await sb.from("doc_templates").insert({ id:t.id, data:t }); return !ins.error;
+  } catch(e){ return false; }
+}
+async function sbDeleteTpl(id){
+  if(!sb) return false;
+  try { var res = await sb.from("doc_templates").delete().eq("id", id); return !res.error; } catch(e){ return false; }
+}
 </script>
 <script>
 var __rest = (this && this.__rest) || function (s, e) {
@@ -785,6 +804,21 @@ function SPSLeaveSystem() {
         })();
         return () => { alive = false; };
     }, []);
+    // Supabase: 앱 시작 시 저장된 서식(결재선 포함) 불러오기
+    useEffect(() => {
+        let alive = true;
+        (async () => {
+            if (!window.__sb) return;
+            const rows = await sbLoadTpls();
+            if (alive && rows && rows.length) setDocTemplates(prev => {
+                const byId = {}; rows.forEach(r => { byId[r.id] = r; });
+                const merged = prev.map(t => byId[t.id] ? byId[t.id] : t);
+                rows.forEach(r => { if (!prev.some(t => t.id === r.id)) merged.push(r); });
+                return merged;
+            });
+        })();
+        return () => { alive = false; };
+    }, []);
     const auH = (id) => reqs.filter((r) => r.eid === id && r.type === "annual" && r.st === "approved").reduce((s, r) => s + r.h, 0);
     const arH = (e) => e.total * WD - auH(e.id);
     const ceH = (id) => grants.filter((g) => g.eid === id && g.st === "approved" && g.yr === CY).reduce((s, g) => s + g.h, 0);
@@ -931,7 +965,14 @@ function SPSLeaveSystem() {
     const allCc = [...new Set([...apprLines.leave.cc, ...apprLines.extra.cc, ...apprLines.attreq.cc, ...apprLines.doc.cc])];
     const isApprover = cu && cu.role === "emp" && allAp.includes(cu.eid);
     const isCC = cu && cu.role === "emp" && allCc.includes(cu.eid);
-    const docApprPending = (cu && cu.role === "emp" && apprLines.doc.ap.includes(cu.eid)) ? docs.filter((d) => d.st === "pending").length : 0;
+    const docApprPending = (cu && cu.role === "emp") ? docs.filter((d) => {
+        if (d.st !== "pending") return false;
+        const tpl = docTemplates.find(t => t.id === d.tid);
+        const apprs = (tpl && tpl.approvers) || [];
+        const mine = apprs.filter(a => a.eid === cu.eid && (a.role || "review") !== "cc");
+        if (!mine.length) return false;
+        return !mine.every(a => d.data && d.data.signs && d.data.signs[a.key]);
+    }).length : 0;
     const apprPending = isApprover ? (reqs.filter((r) => r.st === "pending").length + overtimes.filter((o) => o.st === "pending").length + attReqs.filter((w) => w.st === "pending").length) : 0;
     const empNav = [
         ["home", "홈", HomeTrendy, null],
@@ -941,7 +982,7 @@ function SPSLeaveSystem() {
         ["extra", "시간 외 근로", Zap, null],
         ["apply", "휴가", Palmtree, null],
         ["expense", "경비정산", Receipt, null],
-        ["docs", "문서함", FileText, null],
+        ["docs", "문서함", FileText, docApprPending || null],
         ["messages", "메시지", MessageSquare, empMsgUnread],
         ["myinfo", "내 정보", UserCircle, null],
     ];
@@ -1152,7 +1193,7 @@ function Login_({ lid, setLid, lpw, setLpw, lerr, doLogin, rememberId, setRememb
         React.createElement("div", { className: "auth-brand" },
             React.createElement("img", { src: LOGO_SRC, alt: "Site Planning Seoul", style: { width: 96, height: "auto", margin: "0 auto 4px", display: "block", borderRadius: 16 } }),
             React.createElement("h1", { className: "auth-title" }, "Worklog"),
-            React.createElement("p", { style: { fontSize: 11, color: "var(--muted)", margin: "2px 0 0", textAlign: "center" } }, "v2.2")),
+            React.createElement("p", { style: { fontSize: 11, color: "var(--muted)", margin: "2px 0 0", textAlign: "center" } }, "v2.4")),
         React.createElement("div", { className: "field" },
             React.createElement("label", { className: "flabel" }, "\uC544\uC774\uB514"),
             React.createElement("input", { value: lid, onChange: (e) => setLid(e.target.value), placeholder: "\uC544\uC774\uB514 \uC785\uB825" })),
@@ -5806,9 +5847,10 @@ function AdminDocs({ cu, emps, gE, docTemplates, setDocTemplates, docs, setDocs,
     if(tplEdit.approvers){ clean.approvers = tplEdit.approvers.filter(a=>a.eid).map(a=>Object.assign(Object.assign({},a),{ key: a.key||("a"+Math.random().toString(36).slice(2,7)), role: a.role||"review" })); if(clean.approvers.length===0) delete clean.approvers; }
     if(tplEdit.id){ setDocTemplates(p=>p.map(t=>t.id===tplEdit.id?clean:t)); }
     else { clean.id = ids.current.dt++; setDocTemplates(p=>[...p, clean]); }
+    if(window.__sb) sbUpsertTpl(clean);
     setTplEdit(null);
   };
-  const delTpl = (id)=>{ if(!confirm("\uC774 \uC11C\uC2DD\uC744 \uC0AD\uC81C\uD560\uAE4C\uC694?")) return; setDocTemplates(p=>p.filter(t=>t.id!==id)); };
+  const delTpl = (id)=>{ if(!confirm("\uC774 \uC11C\uC2DD\uC744 \uC0AD\uC81C\uD560\uAE4C\uC694?")) return; if(window.__sb) sbDeleteTpl(id); setDocTemplates(p=>p.filter(t=>t.id!==id)); };
 
   return React.createElement(React.Fragment, null,
     // sub tabs
@@ -5911,6 +5953,34 @@ function EmpDocs({ cu, gE, emps, docTemplates, docs, setDocs, apprLines, ids, ad
   const line = apprLines.doc || { ap:[], cc:[] };
   const stMap = { pending:["amber","\uB300\uAE30"], approved:["mint","\uC2B9\uC778"], rejected:["rose","\uBC18\uB824"] };
   const start = (t)=>{ setPicked(t); setForm({}); };
+  // 받은 결재: 내가 결재자로 지정된 대기 문서
+  const inbox = docs.filter(d=>{
+    if(d.st!=="pending") return false;
+    const tpl=tplOf(d.tid); const apprs=(tpl&&tpl.approvers)||[];
+    return apprs.some(a=>a.eid===cu.eid && (a.role||"review")!=="cc");
+  }).sort((a,b)=>(b.app||"").localeCompare(a.app||""));
+  const mySigned = (d)=>{ const tpl=tplOf(d.tid); const apprs=(tpl&&tpl.approvers)||[]; const mine=apprs.filter(a=>a.eid===cu.eid&&(a.role||"review")!=="cc"); return mine.length>0 && mine.every(a=>d.data&&d.data.signs&&d.data.signs[a.key]); };
+  const signDoc = (d)=>{
+    const tpl=tplOf(d.tid); const apprs=(tpl&&tpl.approvers)||[];
+    const mine=apprs.filter(a=>a.eid===cu.eid&&(a.role||"review")!=="cc");
+    if(!mine.length) return;
+    const data=Object.assign({}, d.data);
+    const signs=Object.assign({}, data.signs||{});
+    mine.forEach(a=>{ signs[a.key]=cu.name; });
+    data.signs=signs;
+    const allSigned=apprs.filter(a=>(a.role||"review")!=="cc").every(a=>signs[a.key]);
+    const newSt=allSigned?"approved":"pending";
+    setDocs(p=>p.map(x=>x.id===d.id?Object.assign({},x,{data:data,st:newSt}):x));
+    if(window.__sb && d._sb){ const patch={ data:data }; if(allSigned) patch.status="approved"; sbUpdateDoc(d.id, patch); }
+    addNotif("emp:"+d.eid, ((tpl||{}).name||"\uBB38\uC11C")+"\uC5D0 "+cu.name+"\uB2D8\uC774 \uACB0\uC7AC\uD588\uC2B5\uB2C8\uB2E4."+(allSigned?" (\uCD5C\uC885 \uC2B9\uC778)":""), "leave");
+  };
+  const rejectDoc = (d)=>{
+    if(!confirm("\uBC18\uB824\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C?")) return;
+    setDocs(p=>p.map(x=>x.id===d.id?Object.assign({},x,{st:"rejected"}):x));
+    if(window.__sb && d._sb) sbUpdateDoc(d.id, { status:"rejected" });
+    const tpl=tplOf(d.tid);
+    addNotif("emp:"+d.eid, ((tpl||{}).name||"\uBB38\uC11C")+" \uBB38\uC11C\uAC00 \uBC18\uB824\uB418\uC5C8\uC2B5\uB2C8\uB2E4.", "leave");
+  };
   const submit = ()=>{
     if(picked.layout==="expense"){
       if(!form.payMethod || !String(form.payMethod).trim()) return alert("\uACB0\uC81C\uBC29\uC2DD\uC744 \uC785\uB825\uD558\uC138\uC694");
@@ -5931,6 +6001,24 @@ function EmpDocs({ cu, gE, emps, docTemplates, docs, setDocs, apprLines, ids, ad
   };
   return React.createElement(React.Fragment, null,
     !picked && React.createElement(React.Fragment, null,
+      inbox.length>0 && React.createElement("div", { className:"card", style:{ marginBottom:16 } },
+        React.createElement("div", { className:"card-head" },
+          React.createElement("h3", null, "\uBC1B\uC740 \uACB0\uC7AC"),
+          React.createElement("span", { className:"subtab-badge" }, inbox.length)),
+        React.createElement("div", { className:"table-wrap" }, React.createElement("table", { className:"tbl" },
+          React.createElement("thead", null, React.createElement("tr", null,
+            ["\uBB38\uC11C","\uC2E0\uCCAD\uC790","\uC81C\uCD9C\uC77C",""].map((h,i)=>React.createElement("th", { key:i }, h)))),
+          React.createElement("tbody", null, inbox.map(d=>{ const e=gE(d.eid); const done=mySigned(d); return React.createElement("tr", { key:d.id },
+            React.createElement("td", null, (tplOf(d.tid)||{}).name||"-"),
+            React.createElement("td", null, e?e.name:"-"),
+            React.createElement("td", null, d.app||"-"),
+            React.createElement("td", { className:"td-actions" },
+              React.createElement("button", { className:"btn btn-line btn-xs", onClick:()=>setDetail(d) }, "\uBCF4\uAE30"),
+              done
+                ? React.createElement("span", { className:"chip chip-mint", style:{ fontSize:11 } }, "\uACB0\uC7AC\uC644\uB8CC")
+                : React.createElement(React.Fragment, null,
+                    React.createElement("button", { className:"btn btn-primary btn-xs", onClick:()=>signDoc(d) }, "\uC2B9\uC778"),
+                    React.createElement("button", { className:"btn btn-line btn-xs", onClick:()=>rejectDoc(d) }, "\uBC18\uB824")))); })))) ),
       React.createElement("div", { className:"card", style:{ marginBottom:16 } },
         React.createElement("div", { className:"card-head" }, React.createElement("h3", null, "\uC0C8 \uBB38\uC11C \uC791\uC131")),
         React.createElement("p", { className:"lead" }, "\uC11C\uC2DD\uC744 \uC120\uD0DD\uD574 \uBB38\uC11C\uB97C \uC791\uC131\uD558\uACE0 \uACB0\uC7AC\uB97C \uC0C1\uC2E0\uD558\uC138\uC694."),
